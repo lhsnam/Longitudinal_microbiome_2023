@@ -1,2 +1,2 @@
-# Longitudinal_microbiome_2023
+# Longitudinal analysis in infant microbiome 2023
 Microbiota analysis for my master thesis
