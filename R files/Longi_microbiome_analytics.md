@@ -47,7 +47,7 @@ library(Maaslin2)
 library(flextable)
 ```
 
-#Preparation
+# Preparation
 
 ```{r}
 load(file = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/phyloseq_select_1904-OTUs_fin.RData")
@@ -157,7 +157,7 @@ rownames(tax.all) <- rownames(tax.clean)
 tax_table(filter.ps) <- tax_table(tax.all)
 ```
 
-##Remove singleton
+## Remove singleton
 
 ```{r}
 #sort sample total reads, prune taxa
@@ -242,7 +242,7 @@ norm_counts <- sweep(as.matrix(data.frame(otu_table(all.norm))), 2, norm_factors
 length(which(abundances(all.fil) ==0))/(phyloseq::nsamples(all.fil)*phyloseq::ntaxa(all.fil)) #97.71%
 length(which(abundances(all.norm) ==0))/(phyloseq::nsamples(all.norm)*phyloseq::ntaxa(all.norm)) #94.97%
 ```
-##phILR
+## phILR
 
 ```{r}
 #zero replacement before running philr
@@ -316,9 +316,9 @@ ggplot2::ggsave(filename = "PCoA_study.png",
 head(ord_all$values$Relative_eig, 5) #34.94% and 18.27%
 ```
 
-#Diversity
+# Diversity
 
-##Alpha diversity
+## Alpha diversity
 
 ```{r}
 ggplot(data = data.frame("total_reads" =  phyloseq::sample_sums(all.fil),
@@ -423,7 +423,7 @@ adiv %>%
             mean_chao1 = mean(Chao1.Chao1),
             mean_simp = mean(Simpson))
 ```
-Relative Abundance (all)
+## Relative Abundance (all)
 ```{r}
 std_mean <- function(x) sd(x)/sqrt(length(x))
 se <- function(x) sqrt(var(x) / length(x))
@@ -498,7 +498,7 @@ ggplot2::ggsave(filename = "Relative abundance (area).png",
        bg = "white")
 ```
 
-##Beta-diversity
+## Beta-diversity
 
 ```{r}
 dist.mat <- as(gp.all.dist, "matrix")
@@ -538,7 +538,7 @@ ggplot(df.philr, aes(x=L1, y=value, fill=L1)) +
                      hide.ns = TRUE)
 ```
 
-Permanova
+## Permanova
 
 ```{r}
 #test
@@ -548,7 +548,7 @@ meta.df$day <- all.fil@sam_data$day
 adonis2(gp.all.dist ~ age_month + sex + wfa_zscore + day + breastfeeding, data = meta.df, by = "terms", permutations = 999)
 ```
 
-#Clustering
+# Clustering
 
 ```{r}
 #Colors
