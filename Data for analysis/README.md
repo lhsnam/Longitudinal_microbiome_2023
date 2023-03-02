@@ -1,4 +1,7 @@
-# This folder include two data files that were used in the data analysis:
+# Data for analysis:
+
+This folder includes two files with the following description:
+
 - **Newick file**: phylogenetic tree
 - **Phyloseq file**:
 
