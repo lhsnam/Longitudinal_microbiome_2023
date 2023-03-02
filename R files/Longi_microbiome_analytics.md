@@ -1,11 +1,11 @@
 ---
 title: "Diarrhoea_longitudinal_analytics_fin"
 author: "Son-Nam H. Le"
-date: "16-Feb-2023"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
-load packages:
+# load packages:
 
 ```{r}
 library(treeio) #read newick
@@ -45,6 +45,8 @@ library(finalfit)
 library(kableExtra)
 library(Maaslin2)
 library(flextable)
+library(lme4)
+library(lmerTest)
 ```
 
 # Preparation
@@ -423,7 +425,7 @@ adiv %>%
             mean_chao1 = mean(Chao1.Chao1),
             mean_simp = mean(Simpson))
 ```
-## Relative Abundance (all)
+Relative Abundance (all)
 ```{r}
 std_mean <- function(x) sd(x)/sqrt(length(x))
 se <- function(x) sqrt(var(x) / length(x))
@@ -434,7 +436,7 @@ day_abund <- microbiomeutilities::phy_to_ldf(day_abund,
                                          transform.counts = "compositional")
 
 day_abund <- day_abund %>% 
-  group_by(Phylum, day, antibiotic_trt) %>%
+  group_by(Phylum, day) %>%
   summarise(mean_abundance = mean(Abundance), se = se(Abundance), median = median(Abundance), q1 = quantile(Abundance)[2], q3 = quantile(Abundance)[4]) %>% 
   ungroup()
 
@@ -443,6 +445,9 @@ day_abund <- as.data.frame(day_abund)
 top.phyla <- c("Firmicutes", "Actinobacteria", "Proteobacteria", "Bacteroidetes")
 
 day_abund <- day_abund %>% dplyr::mutate(pick_Phylum = ifelse(Phylum %in% top.phyla, yes = Phylum, "Others"))
+
+day_abund.control <- day_abund %>% filter(day == "Control")
+
 day_abund <- day_abund %>% filter(day != "Control")
 
 day_abund.fil <- day_abund %>% 
@@ -450,19 +455,29 @@ day_abund.fil <- day_abund %>%
   summarise(mean_abundance = sum(mean_abundance)) %>% 
   ungroup()
 
+day_abund.control <- day_abund.control %>% 
+  group_by(pick_Phylum, day) %>%
+  summarise(mean_abundance = sum(mean_abundance)) %>% 
+  ungroup()
+
 day_abund.fil$pick_Phylum <- factor(day_abund.fil$pick_Phylum , levels=c("Bacteroidetes", "Actinobacteria", "Firmicutes", "Proteobacteria", "Others"))
 
+day_abund.control$pick_Phylum <- factor(day_abund.control$pick_Phylum , levels=c("Bacteroidetes", "Actinobacteria", "Firmicutes", "Proteobacteria", "Others"))
 
 day1_abund <- subset(day_abund.fil, day == "1")
 day7_abund <- subset(day_abund.fil, day == "7")
 day14_abund <- subset(day_abund.fil, day == "14")
 
+
 phyla.col <- c4a("light", 6)
  
 (area.plot <- ggplot(data = day_abund.fil) +
-    geom_area(aes(x=day, y=mean_abundance, group = pick_Phylum, fill = pick_Phylum), stat = "identity", position = position_fill(reverse = TRUE), color = "white") +
+    geom_area(aes(x=day, y=mean_abundance, group = pick_Phylum, fill = pick_Phylum), stat = "identity", position = position_fill(reverse = TRUE), color = "white", linewidth = 0.1) +
+    geom_col(data = day_abund.control,
+                 aes(x=day, y=mean_abundance, group = pick_Phylum, fill = pick_Phylum), position = position_fill(reverse = TRUE), color = "white", width = 0.5, linewidth = 0.1) + 
     geom_text(data = day1_abund, aes(x = 0.94, y = c(0.19, 0.045, 0.55, 0.99, 0.9), label = formatC(round(mean_abundance,2),2,format="f")), hjust = 1, nudge_x = 0.05,  color = "black", size = 3) +
     geom_text(data = day14_abund, aes(x = 3.01, y = c(0.33, 0.1, 0.7, 1, 0.95), hjust = 0, label = formatC(round(mean_abundance,2),2,format="f")), color = "black", size = 3) +
+    geom_text(data = day_abund.control, aes(x = 4.3, y = c(0.33, 0.1, 0.7, 1, 0.95), hjust = 0, label = formatC(round(mean_abundance,2),2,format="f")), color = "black", size = 3) +
     geom_label(data = day1_abund, aes(x= 0.68, y = c(0.19, 0.045, 0.55, 0.99, 0.9), label= pick_Phylum, fill = pick_Phylum), size = 5, hjust = 1, nudge_x = -.2, color = "black", label.size = NA) +
     scale_fill_manual(values = phyla.col) +
     labs(title = "b \n",
@@ -482,7 +497,7 @@ phyla.col <- c4a("light", 6)
         strip.background = element_rect(fill=NA,color= "grey80"),
         legend.position = "none",
         aspect.ratio = 0.7) +
-    scale_x_discrete(expand= expand_scale(mult = c(0, 0), add = c(3,1))) +
+    scale_x_discrete(expand= expand_scale(mult = c(0, 0), add = c(3,1)), limits = c("1", "7", "14", "Control")) +
     scale_y_continuous(expand= expand_scale(mult = c(0, 0), add = c(0.02,0.12)))
 )
 
@@ -497,7 +512,32 @@ ggplot2::ggsave(filename = "Relative abundance (area).png",
        limitsize = TRUE,
        bg = "white")
 ```
+## Tukey for Alpha diversity
 
+```{r}
+adiv
+
+#Shannon
+shan.div <- adiv[,c("Shannon", "day")]
+tukey.shan <- TukeyHSD(aov(lm(Shannon~day, shan.div)))$day
+tukey.shan <- as.data.frame(tukey.shan)
+
+tukey.shan[order(tukey.shan$`p adj`),]
+
+#Simpson
+simp.div <- adiv[,c("Simpson", "day")]
+tukey.simp <- TukeyHSD(aov(lm(Simpson~day, simp.div)))$day
+tukey.simp <- as.data.frame(tukey.simp)
+
+tukey.simp[order(tukey.simp$`p adj`),]
+
+#Chao1
+chao1.div <- adiv[,c("Chao1", "day")]
+tukey.chao1 <- TukeyHSD(aov(lm(Chao1~day, chao1.div)))$day
+tukey.chao1 <- as.data.frame(tukey.chao1)
+
+tukey.chao1[order(tukey.chao1$`p adj`),]
+```
 ## Beta-diversity
 
 ```{r}
@@ -538,7 +578,7 @@ ggplot(df.philr, aes(x=L1, y=value, fill=L1)) +
                      hide.ns = TRUE)
 ```
 
-## Permanova
+Permanova
 
 ```{r}
 #test
@@ -594,7 +634,7 @@ info_balance <- function(node) {
       return(bal)
 }
 ```
-##Silhouette & Random forest
+## Silhouette & Random forest
 
 ```{r}
 sample_data(all.norm)$CST <- as.factor(cut4)
@@ -736,13 +776,13 @@ mush <- function(hmap, hcbs) {
 
 ```
 
-##Heat map
+## Heat map
 
 ```{r}
 #top.genus
-genus.ps <- tax_glom(all.fil, "Species")
+genus.ps <- tax_glom(all.fil, "Genus")
 genus.abund <- transform_sample_counts(genus.ps, function(OTU) OTU/sum(OTU))
-top.genus <- top_taxa(genus.abund, 50)
+top.genus <- top_taxa(genus.abund, 20)
 top.genus.ps <- prune_taxa(top.genus, genus.abund)
 
 taxa.order <- names(sort(taxa_sums(top.genus.ps)))
@@ -783,7 +823,7 @@ hcbday <- make_hcb(hcbdf, "day", name="Day",fillScale = scale_fill_manual(values
 #Antibiotic treatment
 hcbabt <- make_hcb(hcbdf, "antibiotic_trt", name="antibiotic_trt",fillScale = scale_fill_manual(values= c("yes" = "#087e8b", "no" =  "#ff5a5f", "NA" = "grey75")))
 
-big.hm <- mush(hm, list(hcbabt))
+big.hm <- mush(hm, list(hcbday, hcbabt))
 big.heatmap <- plot(ggarrange(big.hm))
 
 ggplot2::ggsave(filename = "Heatmap (unorm).png", 
@@ -798,8 +838,9 @@ ggplot2::ggsave(filename = "Heatmap (unorm).png",
        bg = "white")
 ```
 
-#--------------------
-#Filter data of 04EN study for the paired-day 's differential abundance analysis
+===
+
+# Filter data of 04EN study for the paired-day 's differential abundance analysis
 
 ```{r}
 data.04en <- subset_samples(all.norm, study_ID == "04EN") #218 samples
@@ -857,28 +898,106 @@ patient.114.un <- prune_taxa(taxa_sums(patient.114.un) > 0, patient.114.un)
 sample_data(patient.114.un) <- sample_data(patient.114.un)[sample_data(patient.114.un)$patient_ID %in% sample_data(patient.114.un)$patient_ID[duplicated(sample_data(patient.114.un)$patient_ID)],] #remove unique patients that only have day 1 or day 14
 patient.114.un # 116 samples and 955 taxa
 ```
-#Area plot for 04en
+
+# Genus relative abundance plot
+
 ```{r}
 dt04_abund <- microbiome::aggregate_rare(data.04en, level = "Genus", detection = 0, prevalence = 0)
 
 dt04_abund <- microbiomeutilities::phy_to_ldf(dt04_abund, 
                                          transform.counts = "compositional")
 
-ggplot(subset(dt04_abund, Genus == "Bacteroides"), aes(x = day, y = Abundance, fill = antibiotic_trt)) +
-  geom_boxplot() +
-  stat_compare_means(method = "wilcox.test")
+dt04_abund$antibiotic_trt <- as.factor(dt04_abund$antibiotic_trt)
+
+
 
 dt04_abund <- dt04_abund %>% 
   group_by(Genus, day, antibiotic_trt) %>%
   summarise(mean_abundance = mean(Abundance), se = se(Abundance), median = median(Abundance), q1 = quantile(Abundance)[2], q3 = quantile(Abundance)[4]) %>% 
   ungroup()
 
+top.gn.abund <- subset(dt04_abund, Genus %in% c("Bifidobacterium", 
+                                                "Streptococcus", 
+                                                "Bacteroides", 
+                                                "Escherichia", 
+                                                "Veillonella",
+                                                "Phocaeicola"))
+
+top.gn.abund$Genus <- factor(top.gn.abund$Genus,
+                             levels = c("Bifidobacterium", 
+                                        "Streptococcus", 
+                                        "Bacteroides",
+                                        "Escherichia",
+                                        "Veillonella",
+                                        "Phocaeicola"))
+
+(genus.line <- ggplot(top.gn.abund,
+                      aes(x = day,
+                          y = mean_abundance,
+                          group = antibiotic_trt,
+                          color = antibiotic_trt)) + 
+    geom_errorbar(aes(ymin=mean_abundance-se, 
+                      ymax=mean_abundance+se), 
+                  width=0.1, 
+                  alpha = 0.75) +
+    geom_line(size = 1.6) +
+    geom_point(size = 1) +
+    facet_wrap(.~Genus, 
+               nrow = 1) +
+    scale_color_manual(values = c("no" = "grey50", "yes" = "#e07a5f"),
+                       guide = guide_legend(title = "Antibiotic \ntreatment")) +
+    theme_light() +
+    guides(x.sec = "axis",
+         y.sec = "axis") +
+    labs(x = "Day",
+         y = "Mean relative abundance") +
+    theme(plot.title = element_text(size = 15, 
+                                    face = "bold", 
+                                    vjust = 3, 
+                                    hjust = 0),
+          aspect.ratio = 1,
+          plot.margin = ggplot2::margin(10,0.5,0.5,10),
+          axis.line = element_line(linewidth = .5),
+          axis.text.x.bottom = element_text(vjust = -1, 
+                                            size = 10),
+          axis.text.y.left =element_text(size = 10),
+          axis.text.x.top = element_blank(),
+          axis.text.y.right = element_blank(),
+          axis.ticks.x.top = element_blank(),
+          axis.ticks.y.right = element_blank(),
+          axis.title.y = element_text(color = "grey30", 
+                                      face = "bold", 
+                                      size = 10, 
+                                      angle = 90, 
+                                      vjust = 3),
+          strip.background = element_rect(fill = NA, 
+                                          color = "grey30", 
+                                          linewidth = 1.5),
+          strip.text = element_text(face = "bold.italic", color = "black"))
+  )
 
 
-filter(dt04_abund, Genus == "Bacteroides")
+ggplot2::ggsave(filename = "genus.line.pdf", 
+       plot = genus.line,
+       device = "pdf", 
+       path = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/Heatmap", 
+       width = 16, 
+       height = 4, 
+       units = "in",
+       dpi = 1000,
+       limitsize = TRUE,
+       bg = "white")
+
+
+top.gn.abund <- top.gn.abund %>% 
+  group_by(Genus, day, antibiotic_trt) %>%
+  summarise(mean_abundance = mean(Abundance), se = se(Abundance), median = median(Abundance), q1 = quantile(Abundance)[2], q3 = quantile(Abundance)[4]) %>% 
+  ungroup()
+
+filter(dt04_abund, Genus == "Phocaeicola")
 ```
 
-#Demographic 04EN:
+# Demographic 04EN:
 
 ```{r}
 sample.04en <- as.data.frame(unclass(sample_data(data.04en)))
@@ -930,15 +1049,13 @@ demo_table <-kable(demo.04en, escape = F,
 
 tf <- tempfile(fileext = ".docx")
 
-flextable::save_as_docx(demo_table, path = tf, align = "center", values = )
-
 demo_table <- demo_table %>%
   column_spec(1:2, color = "black", width = "2in")
 
 save_kable(x = demo_table, file = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/demo_table.docx", density = 10000, zoom = 1)
 ```
 
-##Beta diversity for patient have at least 2 timepoints
+## Beta diversity for patient have at least 2 timepoints
 
 ```{r}
 sample.3d <- rownames(sample_data(patient.3d.ps)) 
@@ -1096,7 +1213,7 @@ ab.pair.mean.d14 <- subset(df.philr.3d, antibiotic != "yes_and_no" & day == 14) 
 gp.all.dist.mat <- as.matrix(gp.all.dist)
 
 patient.17
-dist17 <- matrix(rep(NA,length(patient.17pp)), nrow=length(patient.17), ncol=1)
+dist17 <- matrix(rep(NA,length(patient.17)), nrow=length(patient.17), ncol=1)
 patient.17.ps
 p17.df <- as.data.frame(as.matrix(sample_data(patient.17.ps)))
 
@@ -1136,16 +1253,21 @@ summary(dist714)
 colnames(dist714) <- "distance714"
 rownames(dist714) <- unique(p714.df$patient_ID)
 
-#combine dist for patients have 3 timepoints
+#combine dist for patients have 3 timepoints (problem here !!!)
 dist.3d <- as.matrix(dist17[rownames(dist714),])
 colnames(dist.3d) <- "distance17"
-dist.3d <- data.frame(dist.3d, dist714)
+
+#create another subset that include all samples
+dist.3d <- dist17
+dist.3d <- as.data.frame(dist.3d)
+dist.3d$distance714 <- dist714[match(rownames(dist.3d), rownames(dist714))]
 dist.3d.p <- dist.3d
 dist.3d.p$patient_ID <- rownames(dist.3d.p)
 dist.3d.p <- dist.3d.p %>% 
   pivot_longer(cols = c("distance17", "distance714"), names_to = "distance_day", values_to = "distance")
-dist.3d.p$antibiotic_trt <- p714.df$antibiotic_trt
+dist.3d.p$antibiotic_trt <- p17.df$antibiotic_trt
 dist.3d.p <- as.data.frame(dist.3d.p)
+dist.3d.p <- dist.3d.p[which(rowSums(is.na(dist.3d.p))==0),]
 
 dist.3d.plot <- ggplot(dist.3d.p, aes(x = distance_day, y = distance)) +
   geom_boxplot() +
@@ -1172,7 +1294,7 @@ dist.3d.plot <- ggplot(dist.3d.p, aes(x = distance_day, y = distance)) +
                      label.y = 45,
                      paired = F, 
                      size =5) +
-  scale_fill_manual(values = c("#e07a5f", "#f4f1de"), guide = guide_legend(title = "Antibiotic treatment \n")) +
+  scale_fill_manual(values = c("#f4f1de", "#e07a5f"), guide = guide_legend(title = "Antibiotic treatment \n")) +
   theme_classic() +
   labs(title = "d", 
        x = "Day pairs",
@@ -1228,7 +1350,7 @@ rm_legend <- function(p){p + theme(legend.position = "none")}
 
 (bdiv.sum <- ggarrange(rm_legend(ord_plot),
                        ggarrange(rm_legend(bdiv.ab), 
-                       bdiv.patient, nrow = 1),
+                       rm_legend(bdiv.patient), nrow = 1),
                        #align = "h",
                        nrow = 2))
 
@@ -1244,7 +1366,85 @@ ggplot2::ggsave(filename = "summary_beta.pdf",
        bg = "white")
 ```
 
-#Tukey Post hoc test
+# Beta diversity test among VS within, and among-d14 VS among-control
+
+```{r}
+#Among vs Within samples
+
+df.philr.3d$Bdiff #among samples
+dist.3d.p$distance #within samples
+
+summary(df.philr.3d$Bdiff)
+summary(dist.3d.p$distance)
+
+wilcox.test(df.philr.3d$Bdiff, dist.3d.p$distance) #within sample's bdiv is sign. LOWER than among sample's
+
+#pair: day 14 and control
+##filter extract control 
+control.samples <- rownames(sample_data(ps_filter((data.09av), day == "Control"))) 
+d14.samples <- rownames(sample_data(ps_filter((data.04en), day == "14")))
+d1.samples <- rownames(sample_data(ps_filter((data.04en), day == "1")))
+
+
+d14c.dist <- gp.all.dist.mat[control.samples,d14.samples]
+d14c.dist <- reshape2::melt(d14c.dist)
+
+d1c.dist <- gp.all.dist.mat[control.samples,d1.samples]
+d1c.dist <- reshape2::melt(d1c.dist)
+
+
+summary(dist17)
+summary(dist714)
+summary(d14c.dist$value)
+summary(d1c.dist$value)
+
+##Wilcoxon test
+wilcox.test(dist17, dist714) #no diff
+wilcox.test(dist17, d14c.dist$value) #significant different
+t.test(dist714, d14c.dist$value) #significant different
+
+wilcox.test(d14c.dist$value, d1c.dist$value) 
+```
+
+# Linear Mixed-effects in beta diversity
+
+```{r}
+bdiv.04en <- data.frame(sample_data(data.04en))
+bdiv.04en <- bdiv.04en[,c("patient_ID", "sex", "wfa_zscore", "age_month", "Infection_type", "antibiotic_trt")]
+
+bdiv.04en <- bdiv.04en[which(bdiv.04en$patient_ID %in% dist.3d.p$patient_ID),]
+rownames(bdiv.04en) <- NULL
+bdiv.04en <- unique(bdiv.04en)
+
+bdiv.04en <- cbind(dist.3d, bdiv.04en)
+
+
+bdiv.04en.pivot <- bdiv.04en %>% 
+  pivot_longer(cols = c("distance17", "distance714"), names_to = "distance_day", values_to = "distance") 
+
+bdiv.04en.pivot <- bdiv.04en.pivot[which(rowSums(is.na(bdiv.04en.pivot))==0),] %>% as.data.frame()
+bdiv.04en.pivot$Infection_type <- as.factor(bdiv.04en.pivot$Infection_type)
+
+levels(bdiv.04en.pivot$Infection_type) <- c("bacteria_only", "mixed", "mixed", "unknown", "virus_only")
+
+#Linear Mixed-Effects Models
+
+  
+##Bdiv
+lmm_bdiv.04en <- lmerTest::lmer(bdiv.04en.pivot$distance ~ sex + wfa_zscore + age_month + Infection_type + distance_day*antibiotic_trt + (1|patient_ID), bdiv.04en.pivot)
+
+summary(lmm_bdiv.04en)
+
+lmm_bdiv.04en.df <- as.data.frame(summary(lmm_bdiv.04en)$coefficients) %>% rownames_to_column("term")
+
+##Export table
+bdiv.table <- as_flextable(lmm_bdiv.04en)
+
+save_as_docx(bdiv.table, path = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/bdiv_table.docx")
+
+```
+
+# Tukey Post hoc test
 
 ```{r}
 df.philr.3d
@@ -1307,7 +1507,8 @@ tukey.df <- as.data.frame(tukey.df)
 tukey.df[order(tukey.df$`p adj`),]
 ```
 
-#CST transition
+
+# CST transition
 
 ```{r}
 meta.df$CST <- as.factor(clust)
@@ -1893,14 +2094,64 @@ ggplot2::ggsave(filename = "summary_alpha.pdf",
        bg = "white")
 
 ```
-#--------------------
-Note of ANCOMBC when qval (or pval) = 0 (from github): These taxa were considered to have structural zeros. For example, when comparing group A vs. B for taxon X, if all samples in group A have 0 abundance, while the abundances of taxon X in group B are not all 0s, we will consider taxon X has structural zeros in group A, and it will be declared to be significant (one group has something while another has nothing) no matter what the test statistic is. P-value and q-value will also be manually set to be 0.
 
-In this markdown, for the better visualization, all zero qval are changed to the new qval = min(q)^1.2 
+# Linear Mixed Effects
 
-#Differential Abundance Analysis:
+```{r}
+data.04en
 
-Function output ancombc and output deseq2
+#Alpha
+df.04en <- data.frame(sample_data(data.04en))
+df.04en$Infection_type <- as.factor(df.04en$Infection_type)
+
+levels(df.04en$Infection_type) <- c("bacteria_only", "mixed", "mixed", "unknown", "virus_only")
+
+adiv.04en <- adiv[rownames(df.04en),]
+
+#Linear Mixed-Effects Models
+
+##Shannon
+shan.04en <- lmerTest::lmer(adiv.04en$Shannon ~ sex + wfa_zscore + age_month + Infection_type + day*antibiotic_trt + (1|patient_ID), df.04en)
+
+summary(shan.04en)
+
+shan.04en.df <- as.data.frame(summary(shan.04en)$coefficients) %>% rownames_to_column("term")
+
+##Richness
+chao1.04en <- lme4::glmer(adiv.04en$Chao1 ~ sex + age_month + wfa_zscore + Infection_type + day*antibiotic_trt + (1|patient_ID), df.04en, family = poisson())
+
+summary(chao1.04en)
+
+##Simpson
+simp.04en <- lmerTest::lmer(adiv.04en$Simpson ~ sex + wfa_zscore + age_month + Infection_type + day*antibiotic_trt + (1|patient_ID), df.04en)
+
+summary(simp.04en)
+
+simp.04en.df <- as.data.frame(summary(simp.04en)$coefficients) %>% rownames_to_column("term")
+
+#Export table
+shan.table <- as_flextable(shan.04en)
+
+save_as_docx(shan.table, path = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/shannon_table.docx")
+
+chao1.table <- as_flextable(chao1.04en)
+
+save_as_docx(chao1.table, path = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/chao1_table.docx")
+
+simp.table <- as_flextable(simp.04en)
+
+save_as_docx(simp.table, path = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/simp_table.docx")
+```
+
+
+---
+>Note of ANCOMBC when qval (or pval) = 0 (from github): These taxa were considered to have structural zeros. For example, when comparing group A vs. B for taxon X, if all samples in group A have 0 abundance, while the abundances of taxon X in group B are not all 0s, we will consider taxon X has structural zeros in group A, and it will be declared to be significant (one group has something while another has nothing) no matter what the test statistic is. P-value and q-value will also be manually set to be 0.
+
+>In this markdown, for the better visualization, all zero qval are changed to the new qval = min(q)^1.2 
+
+# Differential Abundance Analysis:
+
+*Function output ancombc and output deseq2*
 
 ```{r}
 ## create function to output ancombc results
@@ -1939,9 +2190,9 @@ output_deseq2 <- function(physeq, ds, contrast, alpha, coef, testtype) {
 }
 ```
 
-##ANCOMBC
+## ANCOMBC
 
-###Day 1 and Day 7
+### Day 1 and Day 7
 ```{r}
 patient.17.ps
 patient.17.keep <- prune_taxa(rowSums(abundances(patient.17.ps)>0)>=5, patient.17.ps) #at least 5 samples = 3.7% of the pool
@@ -2011,7 +2262,7 @@ d17.ancom.out.aby$lfc <- log2(exp(d17.ancom.out.aby$lfc))
 d17.ancom.out.abn$lfc <- log2(exp(d17.ancom.out.abn$lfc))
 ```
 
-###Day 7 and Day 14
+### Day 7 and Day 14
 ```{r}
 patient.714.ps
 patient.714.keep <- prune_taxa(rowSums(abundances(patient.714.ps)>0)>=5, patient.714.ps) #at least 5 samples = 3.7% of the pool
@@ -2080,8 +2331,13 @@ d714.ancom.out.aby$lfc <- log2(exp(d714.ancom.out.aby$lfc))
 
 d714.ancom.out.abn$lfc <- log2(exp(d714.ancom.out.abn$lfc))
 ```
-##DESeq2
-###Day 1 and Day 7
+
+---
+
+## DESeq2
+
+
+### Day 1 and Day 7
 ```{r}
 #----------#
 #DeSeq2
@@ -2148,7 +2404,7 @@ rs.17.abn.fil$Species <- unclass(phyloseq::tax_table(patient.17.keep)[rownames(r
 rs.17.abn.fil
 ```
 
-###Day 7 and Day 14
+### Day 7 and Day 14
 ```{r}
 #----------#
 #DeSeq2
@@ -2214,9 +2470,12 @@ rs.714.abn.fil$Species <- unclass(phyloseq::tax_table(patient.714.keep)[rownames
 
 rs.714.abn.fil
 ```
+
+---
+
 ## Limma Voom
 
-###Day 1 and Day 7
+### Day 1 and Day 7
 ```{r}
 #Antibiotic_yes
 #Limma voom with TMM norm and ZINB
@@ -2275,7 +2534,7 @@ fdr_limma.17.abn <- limma_res_df.17.abn %>%
 fdr_limma.17.abn
 ```
 
-###Day 7 and Day 14
+### Day 7 and Day 14
 ```{r}
 #Antibiotic_yes
 #Limma voom with TMM norm and ZINB
@@ -2333,9 +2592,14 @@ fdr_limma.714.abn <- limma_res_df.714.abn %>%
 
 fdr_limma.714.abn
 ```
+
+---
+
 ## MaAslin2
-MaAsLin2 with Wrench normalization
-###Day 1 and Day 7
+
+>MaAsLin2 with Wrench normalization
+
+### Day 1 and Day 7
 ```{r}
 #antibiotic_yes
 mas_17.aby <- Maaslin2(
@@ -2401,7 +2665,9 @@ fdr_mas.17.abn$log2FoldChange <- log2(fc17.abn)
 rownames(fdr_mas.17.abn) <- fdr_mas.17.abn$feature
 
 ```
-###Day 7 and Day 14
+
+### Day 7 and Day 14
+
 ```{r}
 #antibiotic_yes
 mas_714.aby <- Maaslin2(
@@ -2469,8 +2735,13 @@ rownames(fdr_mas.714.abn) <- fdr_mas.714.abn$feature
 
 ```
 
-#Visualize. Day 1 7
-##antibiotic_yes:
+---
+
+#Data visualization (for the differential abundance analysis)
+
+## Visualize. Day 1 7
+
+### antibiotic_yes:
 ```{r}
 #upset
 color.upsetR <- c("#2C69B0", "#F02720", "#6BA3D6", "#EA6B73")
@@ -2621,7 +2892,7 @@ new_da.d17.aby$Freq <- count.17.aby[order(match(as.character(count.17.aby$Var1),
 )
 ```
 
-## antibiotic_no:
+### antibiotic_no:
 ```{r}
 #upset
 otu.select17.abn <- list(DeSeq2 = rownames(rs.17.abn.fil), 
@@ -2782,8 +3053,11 @@ ggplot2::ggsave(filename = "Volcano_d17.png",
        bg = "white")
 ```
 
-#Visualize. Day 7 and Day 14
-##antibiotic_yes:
+---
+
+## Visualize. Day 7 and Day 14
+
+### antibiotic_yes:
 ```{r}
 #upset
 otu.select714.aby <- list(DeSeq2 = rownames(rs.714.aby.fil), 
@@ -2929,7 +3203,8 @@ new_da.d714.aby$Freq <- count.714.aby[order(match(as.character(count.714.aby$Var
 )
 ```
 
-## antibiotic_no:
+### antibiotic_no:
+
 ```{r}
 #upset
 otu.select714.abn <- list(DeSeq2 = rownames(rs.714.abn.fil), 
@@ -3118,7 +3393,7 @@ write_xlsx(new_da.d714.abn,
 
 ```
 
-#Different log2fc
+# Different log2fc
 
 ```{r}
 new_da.d17.abn
@@ -3231,12 +3506,9 @@ ggplot2::ggsave(filename = "Dup_DA.pdf",
        dpi = 500, 
        limitsize = TRUE,
        bg = "white")
-
-
-
 ```
 
-#Heat map for DA
+# Heat map for DA
 ```{r}
 #combine otu from all 4 DA subsets
 chosen_otu<- unique(c(new_da.d17.abn$otu,
@@ -3250,7 +3522,7 @@ genus.da.abund <- transform_sample_counts(genus.da.ps, function(OTU) OTU/sum(OTU
 
 #da.fil.ps <- prune_taxa(chosen_otu, genus.da.abund)
 
-top.da.genus <- top_taxa(genus.da.abund, 40)
+top.da.genus <- top_taxa(genus.da.abund, 20)
 da.fil.ps <- prune_taxa(top.da.genus, genus.da.abund)
 
 taxa.da.order <- names(sort(taxa_sums(da.fil.ps)))
@@ -3295,14 +3567,14 @@ hcbabt <- make_hcb(hcbdf, "antibiotic_trt", name="antibiotic_trt",fillScale = sc
 big.hm <- mush(hm, list(hcb, hcbabt))
 big.heatmap <- plot(ggarrange(big.hm))
 
-ggplot2::ggsave(filename = "Heatmap (unorm).png", 
+ggplot2::ggsave(filename = "Heatmap (unorm).pdf", 
        plot = big.heatmap,
-       device = "png", 
+       device = "pdf", 
        path = "D:/Study/Oucru/SonNam_project/diarrhea_dataset/diarrhea_dataset/updated_images/Final/Heatmap", 
        width = 16, 
-       height = 10, 
+       height = 8, 
        units = "in", 
-       dpi = 800, 
+       dpi = 1000, 
        limitsize = TRUE,
        bg = "white")
 
@@ -3375,7 +3647,7 @@ dup.17.species <- dup.17$Species[c(1:nrow(dup.17))]
 )
 ```
 
-#line plot for specfic otus
+# line plot for specfic otus
 
 ```{r}
 fil.otu <- unique(dup.17$otu,
@@ -3448,11 +3720,13 @@ ggplot2::ggsave(filename = "rel_abund.pdf",
 c.diff <- mean_abund[which(mean_abund$OTUID == "Otu00015"),]
 
 ```
-#------
 
-#Correlation network:
+---
 
-##CClasso function
+# Correlation network:
+
+> CClasso function
+
 ```{r}
 ##############################################################################################
 #-----------------------------------------------------------------------------------------------------
@@ -3847,8 +4121,9 @@ sortEdges <- function(var.name = c(node1, node2)){
 #----------------------------------------------------------#
 ```
 
-##D17:
-###antibiotic_yes
+## D17:
+
+### antibiotic_yes
 ```{r}
 aby.17.keep
 
@@ -3906,7 +4181,7 @@ ggplot2::ggsave(filename = "17aby_net.png",
        bg = "white")
 ```
 
-###antibiotic_no
+### antibiotic_no
 ```{r}
 abn.17.keep
 
@@ -3965,7 +4240,7 @@ ggplot2::ggsave(filename = "17abn_net.png",
        bg = "white")
 ```
 
-###Differential network
+### Differential network
 
 ```{r}
 net_17_cclasso <- netConstruct(data = abn.17.keep, 
@@ -4004,8 +4279,10 @@ props_17_cclasso <- netAnalyze(net_17_cclasso,
                                gcmHeat = FALSE)
 ```
 
-##D714:
-###antibiotic_yes
+## D714:
+
+### antibiotic_yes:
+
 ```{r}
 aby.714.keep
 
@@ -4063,7 +4340,8 @@ ggplot2::ggsave(filename = "714aby_net.png",
        bg = "white")
 ```
 
-###antibiotic_no
+### antibiotic_no:
+
 ```{r}
 abn.714.keep
 
@@ -4121,7 +4399,8 @@ ggplot2::ggsave(filename = "714abn_net.png",
        bg = "white")
 ```
 
-##Week 1
+## Week 1:
+
 ```{r}
 patient.17.un
 
@@ -4211,7 +4490,8 @@ ggplot2::ggsave(filename = "w1_cclasso.png",
        bg = "white")
 ```
 
-##Week 2
+## Week 2:
+
 ```{r}
 patient.714.un
 
@@ -4300,7 +4580,8 @@ ggplot2::ggsave(filename = "w2_cclasso.png",
        bg = "white")
 ```
 
-#Combine plot
+# Combine plot:
+
 ```{r}
 plot_cclasso(net_17.aby.cor.map, net_17aby.adj.mat, aby.17.keep)
 plot_cclasso(net_17.abn.cor.map, net_17abn.adj.mat, abn.17.keep)
