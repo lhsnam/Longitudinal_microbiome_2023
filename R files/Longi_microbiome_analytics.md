@@ -838,7 +838,7 @@ ggplot2::ggsave(filename = "Heatmap (unorm).png",
        bg = "white")
 ```
 
-===
+---
 
 # Filter data of 04EN study for the paired-day 's differential abundance analysis
 
@@ -2737,7 +2737,7 @@ rownames(fdr_mas.714.abn) <- fdr_mas.714.abn$feature
 
 ---
 
-#Data visualization (for the differential abundance analysis)
+# Data visualization (for the differential abundance analysis)
 
 ## Visualize. Day 1 7
 
