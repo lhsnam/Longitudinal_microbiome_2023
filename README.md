@@ -11,10 +11,11 @@ My Master's thesis advisor, **Dr Hao Chung The** (Post-doc Scientist at Oxford U
 Furthermore, I would not finished this thesis without the support of my colleagues in OUCRU-HCM, especially for Molecular Epidemiology group. 
 
 - **Dr Pham Thanh Duy**, Head of the Molecular Epidemiology group, accepted me into the group, and I am thankful for his support.
-- **Dr Ha Minh Lam** - Thank you for giving a detail guidelines for me to extend my data visualization skill.
 - **MSc Chau Vinh** - My coding-problem solver, thank you for helping me to diagnose and troubleshoot any coding and statisticial questions.
 - **Mrs Vo Kim Phuong Linh** - I am thankful that you helped me a lot while I am doing the wet lab, DNA extraction.
 
-I would like to extend my heartfelt for my friends, who have supported me for many things.
+I would also like to thank **Dr Ha Minh Lam** - Thank you for giving a detail guidelines for me to extend my data visualization skill.
+
+Finally, I would like to extend my heartfelt for my friends, who have supported me for many things.
 
 ---
